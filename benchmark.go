@@ -4,12 +4,13 @@ import (
 	"testing"
 )
 
+type GoconveyAssertFunc func(actual interface{}, expected ...interface{}) string
+
 type benchScope struct {
-	B           *testing.B
 	Setup       func()
 	Run         func()
-	RunParallel func()
-	Verify      func()
+	SanityCheck func()
+	VerifyList  []func() string
 }
 
 var curBench *benchScope
@@ -20,15 +21,15 @@ func Benchmark(b *testing.B, main func()) {
 	if curBench != nil {
 		b.Fatalf("GopherMark: calls to Benchmark() cannot be nested.")
 	}
-	curBench = &benchScope{B: b}
+	curBench = &benchScope{}
 
 	// run main, which should set scope vars
 	main()
 
 	// sanity checks
-	if curBench.Run == nil && curBench.RunParallel == nil {
-		b.Fatalf("GopherMark: no benchmarks to run! Please set Run() or" +
-			"RunParallel() definitions within this benchmark.")
+	if curBench.Run == nil {
+		b.Fatalf("GopherMark: no benchmarks to run! Please set Run() " +
+			"definitions within this benchmark.")
 	}
 
 	// TODO both set
@@ -45,8 +46,15 @@ func Benchmark(b *testing.B, main func()) {
 			curBench.Run()
 			b.StopTimer()
 
-			if curBench.Verify != nil {
-				curBench.Verify()
+		}
+
+		if curBench.SanityCheck != nil {
+			curBench.SanityCheck()
+			for _, verify := range curBench.VerifyList {
+				out := verify()
+				if out != "" {
+					b.Fatalf("GopherMark Verify Failure: \n%s", out)
+				}
 			}
 		}
 	}
@@ -68,9 +76,20 @@ func Run(benchFunc func()) {
 	curBench.Run = benchFunc
 }
 
-func Verify(verifyFunc func()) {
+func SanityCheck(sanityFunc func()) {
 	if curBench == nil {
-		panic("GopherMark: can only call Verify() inside of Benchmark()")
+		panic("GopherMark: can only call SanityCheck() inside of Benchmark()")
 	}
-	curBench.Verify = verifyFunc
+	curBench.SanityCheck = sanityFunc
+
+}
+
+// for more, see
+//  https://github.com/smartystreets/goconvey/blob/master/convey/assertions/
+func Verify(actual interface{}, assert GoconveyAssertFunc, expected ...interface{}) {
+	verifyFunc := func() string {
+		return assert(actual, expected...)
+	}
+
+	curBench.VerifyList = append(curBench.VerifyList, verifyFunc)
 }
