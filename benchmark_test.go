@@ -23,15 +23,16 @@ func BenchmarkAThing(b *testing.B) {
 	str := strings.Repeat("I am a cat I have a hat I have a house I have a mouse!", 100)
 
 	Benchmark(b, func() {
+		var count int
 
 		Run(func() {
-			count := strings.Count(str, "mouse!")
+			count = strings.Count(str, "mouse!")
+		})
 
-			Verify(func() {
-				if count != 100 {
-					panic("FAIL")
-				}
-			})
+		Verify(func() {
+			if count != 100 {
+				panic("FAIL")
+			}
 		})
 	})
 
