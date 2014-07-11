@@ -7,10 +7,10 @@ import (
 type GoconveyAssertFunc func(actual interface{}, expected ...interface{}) string
 
 type benchScope struct {
+	B           *testing.B
 	Setup       func()
 	Run         func()
 	SanityCheck func()
-	VerifyList  []func() string
 }
 
 var curBench *benchScope
@@ -21,7 +21,7 @@ func Benchmark(b *testing.B, main func()) {
 	if curBench != nil {
 		b.Fatalf("GopherMark: calls to Benchmark() cannot be nested.")
 	}
-	curBench = &benchScope{}
+	curBench = &benchScope{B: b}
 
 	// run main, which should set scope vars
 	main()
@@ -50,12 +50,6 @@ func Benchmark(b *testing.B, main func()) {
 
 		if curBench.SanityCheck != nil {
 			curBench.SanityCheck()
-			for _, verify := range curBench.VerifyList {
-				out := verify()
-				if out != "" {
-					b.Fatalf("GopherMark Verify Failure: \n%s", out)
-				}
-			}
 		}
 	}
 
@@ -87,9 +81,8 @@ func SanityCheck(sanityFunc func()) {
 // for more, see
 //  https://github.com/smartystreets/goconvey/blob/master/convey/assertions/
 func Verify(actual interface{}, assert GoconveyAssertFunc, expected ...interface{}) {
-	verifyFunc := func() string {
-		return assert(actual, expected...)
+	result := assert(actual, expected...)
+	if result != "" {
+		curBench.B.Fatalf("GopherMark Verify Failure: \n%s", result)
 	}
-
-	curBench.VerifyList = append(curBench.VerifyList, verifyFunc)
 }
